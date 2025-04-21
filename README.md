@@ -5,3 +5,7 @@ Script to automate generating CSV files with list of products for Traceability a
 ```bash
 cp env .env
 ```
+
+```bash
+pip install -r requirements.txt
+```
