@@ -1,0 +1,12 @@
+[Database]
+driver={ODBC Driver 18 for SQL Server}
+server=localhost
+name=
+user=a
+password=
+
+[Settings]
+interval_seconds=30
+last_id_file=last_id.txt
+log_file=info.log
+csv_file_path=

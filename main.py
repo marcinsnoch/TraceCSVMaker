@@ -1,34 +1,37 @@
 import logging
 import csv
 import os
+import configparser
 import time
 import datetime
 import pyodbc
-from dotenv import load_dotenv
 
-load_dotenv()
+# Wczytywanie pliku config.ini
+config = configparser.ConfigParser()
+config.read('config.ini')
 
-DB_CONFIG = {
-    'driver': os.getenv('DB_DRIVER'),
-    'server': os.getenv('DB_SERVER'),
-    'database': os.getenv('DB_NAME'),
-    'uid': os.getenv('DB_USER'),
-    'pwd': os.getenv('DB_PASSWORD'),
-}
-CSV_FILE_PATH = os.getenv('CSV_FILE_PATH')
-INTERVAL = int(os.getenv("INTERVAL_SECONDS", 60))
-LAST_ID_FILE = os.getenv('LAST_ID_FILE')
-LOG_FILE = os.getenv('LOG_FILE')
+# Pobieranie danych z sekcji Database
+db_driver = config['Database']['driver']
+db_server = config['Database']['server']
+db_name = config['Database']['name']
+db_user = config['Database']['user']
+db_password = config['Database']['password']
 
-logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG)
+# Pobieranie danych z sekcji Settings
+interval_seconds = int(config['Settings']['interval_seconds'])
+last_id_file = config['Settings']['last_id_file']
+log_file = config['Settings']['log_file']
+csv_file_path = config['Settings']['csv_file_path']
+
+logging.basicConfig(filename=log_file, level=logging.DEBUG)
 
 
 def get_connection():
     """Return a connection to the database."""
     try:
-        conn_str = (f"DRIVER={DB_CONFIG['driver']};SERVER={DB_CONFIG['server']};DATABASE={DB_CONFIG['database']};"
-                    f"UID={DB_CONFIG['uid']};PWD={DB_CONFIG['pwd']};TrustServerCertificate=Yes;")
-        print(f"Contacted to database: {DB_CONFIG['database']}")
+        conn_str = (f"DRIVER={db_driver};SERVER={db_server};DATABASE={db_name};"
+                    f"UID={db_user};PWD={db_password};TrustServerCertificate=Yes;")
+        print(f"Contacted to database: {db_name}")
         return pyodbc.connect(conn_str)
     except Exception as e:
         logging.error(f"{e}")
@@ -42,14 +45,14 @@ def create_csv_if_not_exists(filename, headers):
 
 def read_last_id():
     """Read the last processed ID from a file."""
-    if os.path.exists(LAST_ID_FILE):
-        with open(LAST_ID_FILE, 'r') as f:
+    if os.path.exists(last_id_file):
+        with open(last_id_file, 'r') as f:
             return int(f.read().strip())
     return 0
 
 def save_last_id(last_id):
     """Save the last processed ID to a file."""
-    with open(LAST_ID_FILE, 'w') as f:
+    with open(last_id_file, 'w') as f:
         f.write(str(last_id))
 
 def get_actions():
@@ -103,7 +106,7 @@ def append_to_csv_by_month(rows, timestamp_column):
         if isinstance(record_ts, str):
             record_ts = datetime.datetime.fromisoformat(record_ts)
 
-        filename = f"{CSV_FILE_PATH}Wyroby_gotowe_{record_ts.strftime('%m-%Y')}.csv"
+        filename = f"{csv_file_path}Wyroby_gotowe_{record_ts.strftime('%m-%Y')}.csv"
         if filename not in grouped:
             grouped[filename] = []
 
@@ -138,7 +141,7 @@ def main_loop():
             print(f"ERROR: Some error occurred. Please check the log file.")
             logging.error(f"{e}")
 
-        time.sleep(INTERVAL)
+        time.sleep(interval_seconds)
 
 if __name__ == "__main__":
     main_loop()

@@ -39,3 +39,8 @@ Thumbs.db
 *.pyc
 *.pyo
 *.pyd
+
+build/
+dist/
+
+config.ini

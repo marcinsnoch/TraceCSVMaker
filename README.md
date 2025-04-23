@@ -3,9 +3,11 @@
 Script to automate generating CSV files with list of products for Traceability app.
 
 ```bash
-cp env .env
+cp config.txt config.ini
 ```
 
+Make exe
+
 ```bash
-pip install -r requirements.txt
+pyinstaller --onefile --add-data=last_id.txt:. main.py
 ```
