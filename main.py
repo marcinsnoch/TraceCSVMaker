@@ -6,10 +6,20 @@ import time
 import datetime
 import pyodbc
 
-# Wczytywanie pliku config.ini
-config = configparser.ConfigParser()
-config.read('config.ini')
+def load_config(config_file='config.ini'):
+    """Load configuration from a file and handle potential errors."""
+    config = configparser.ConfigParser()
+    if not os.path.exists(config_file):
+        logging.error(f"Config file '{config_file}' not found.")
+        raise FileNotFoundError(f"Config file '{config_file}' not found.")
+    try:
+        config.read(config_file)
+        return config
+    except configparser.Error as e:
+        logging.error(f"Error reading config file '{config_file}': {e}")
+        raise
 
+config = load_config()
 # Pobieranie danych z sekcji Database
 db_driver = config['Database']['driver']
 db_server = config['Database']['server']
@@ -28,13 +38,20 @@ logging.basicConfig(filename=log_file, level=logging.DEBUG)
 
 def get_connection():
     """Return a connection to the database."""
+    conn = None
     try:
         conn_str = (f"DRIVER={db_driver};SERVER={db_server};DATABASE={db_name};"
                     f"UID={db_user};PWD={db_password};TrustServerCertificate=Yes;")
-        print(f"Contacted to database: {db_name}")
-        return pyodbc.connect(conn_str)
+        conn = pyodbc.connect(conn_str)
+        print(f"Successfully connected to database: {db_name}")
+        return conn
     except Exception as e:
-        logging.error(f"{e}")
+        logging.error(f"Database connection error: {e}")
+        print(f"Database connection error: {e}")
+        if conn:
+            conn.close()
+        return None
+
 
 def create_csv_if_not_exists(filename, headers):
     """Create a CSV file with headers if it does not exist."""
@@ -57,11 +74,17 @@ def save_last_id(last_id):
 
 def get_actions():
     """Fetch actions from the database."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, minmax FROM actions ORDER BY action_order")
-    actions = cursor.fetchall()
-    conn.close()
+    conn = None
+    try:
+        conn = get_connection()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, minmax FROM actions ORDER BY action_order")
+            actions = cursor.fetchall()
+            return actions
+    finally:
+        if conn:
+            conn.close()
     return actions
 
 def fetch_new_records(cursor, last_id, actions):
@@ -120,28 +143,37 @@ def append_to_csv_by_month(rows, timestamp_column):
             writer.writerows(records)
 
 def main_loop():
-    conn = get_connection()
-    cursor = conn.cursor()
-    actions = get_actions()
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        if conn:
+            cursor = conn.cursor()
+            actions = get_actions()
 
-    while True:
-        try:
-            last_id = read_last_id()
-            rows = fetch_new_records(cursor, last_id, actions)
-            if rows:
-                append_to_csv_by_month(rows, timestamp_column="created_at")
-                save_last_id(rows[-1]["id"])
-                print(f"[{datetime.datetime.now()}] Added {len(rows)} products.")
-                # logging.info(f"[{datetime.datetime.now()}] Added {len(rows)} products.")
-            else:
-                print(f"[{datetime.datetime.now()}] New products not found.")
-                # logging.info(f"[{datetime.datetime.now()}] New products not found.")
+            while True:
+                try:
+                    last_id = read_last_id()
+                    rows = fetch_new_records(cursor, last_id, actions)
+                    if rows:
+                        append_to_csv_by_month(rows, timestamp_column="created_at")
+                        save_last_id(rows[-1]["id"])
+                        print(f"[{datetime.datetime.now()}] Added {len(rows)} products.")
+                        # logging.info(f"[{datetime.datetime.now()}] Added {len(rows)} products.")
+                    else:
+                        print(f"[{datetime.datetime.now()}] New products not found.")
+                        # logging.info(f"[{datetime.datetime.now()}] New products not found.")
 
-        except Exception as e:
-            print(f"ERROR: Some error occurred. Please check the log file.")
-            logging.error(f"{e}")
+                except Exception as e:
+                    print(f"ERROR: Some error occurred. Please check the log file.")
+                    logging.error(f"{e}")
 
-        time.sleep(interval_seconds)
+                time.sleep(interval_seconds)
+    except Exception as e:
+        print(f"ERROR: Main loop error: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     main_loop()
